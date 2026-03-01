@@ -13,20 +13,38 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__, static_folder=None)
-    CORS(app)
+
+    CORS(app, resources={r"/api/*": {"origins": [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        os.getenv("FRONTEND_URL", "*")
+    ]}})
+
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change_me')
     db.init_app(app)
+
     with app.app_context():
         db.create_all()
+        admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
+        admin = Admin.query.filter_by(username='admin').first()
+        if not admin:
+            db.session.add(Admin(
+                username='admin',
+                password_hash=generate_password_hash(admin_password)
+            ))
+            db.session.commit()
+        else:
+            admin.password_hash = generate_password_hash(admin_password)
+            db.session.commit()
 
     @app.route('/api/apply', methods=['POST'])
     def apply():
         try:
             data = request.get_json(force=False) or {}
         except BadRequest:
-            return jsonify({'error':'Invalid JSON payload'}), 400
+            return jsonify({'error': 'Invalid JSON payload'}), 400
         prenom = (data.get('prenom') or '').strip()
         nom = (data.get('nom') or '').strip()
         filiere = data.get('filiere')
@@ -62,7 +80,7 @@ def create_app():
         if annee: q = q.filter_by(annee=annee)
         if groupe: q = q.filter_by(groupe=groupe)
         students = q.order_by(Student.id.desc()).all()
-        result = [{'id':s.id, 'prenom':s.prenom, 'nom':s.nom, 'filiere':s.filiere, 'annee':s.annee, 'groupe':s.groupe} for s in students]
+        result = [{'id': s.id, 'prenom': s.prenom, 'nom': s.nom, 'filiere': s.filiere, 'annee': s.annee, 'groupe': s.groupe} for s in students]
         return jsonify(result)
 
     @app.route('/api/admin/students/<int:sid>', methods=['DELETE'])
@@ -91,7 +109,8 @@ def create_app():
         bio = BytesIO()
         wb.save(bio)
         bio.seek(0)
-        return send_file(bio, download_name='students.xlsx', as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return send_file(bio, download_name='students.xlsx', as_attachment=True,
+                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     @app.errorhandler(400)
     def handle_bad_request(e):
