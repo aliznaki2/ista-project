@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://ista-project-cv3y61vkc-aliznaki4-9204s-projects.vercel.app/api/:path*"
+      "destination": "https://ista-project.vercel.app/api/:path*"
     },
     {
       "source": "/(.*)",
