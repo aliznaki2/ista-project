@@ -7,6 +7,7 @@ from io import BytesIO
 from openpyxl import Workbook
 from flask_cors import CORS
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.pool import NullPool
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,9 +21,23 @@ def create_app():
         os.getenv("FRONTEND_URL", "*")
     ]}})
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+    db_url = os.getenv('DATABASE_URL', '')
+    # Neon requires sslmode=require
+    if 'neon.tech' in db_url and 'sslmode' not in db_url:
+        db_url += '?sslmode=require'
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'poolclass': NullPool,
+        'pool_pre_ping': True,
+        'connect_args': {
+            'sslmode': 'require',
+            'connect_timeout': 10,
+        }
+    }
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change_me')
+
     db.init_app(app)
 
     with app.app_context():
